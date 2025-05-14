@@ -1,118 +1,120 @@
-// App.js
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import io from 'socket.io-client';
 import TaskList from './components/TaskList';
 import TaskForm from './components/TaskForm';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
 import './App.css';
 
+const socket = io('http://localhost:5000');
 
 const App = () => {
   const [tasks, setTasks] = useState([]);
-  const [sortOption, setSortOption] = useState('default');
-  const [filterOption, setFilterOption] = useState('all');
+  const [notifications, setNotifications] = useState([]);
+  const [username] = useState('muqeet'); // static user for now
 
-  const fetchTasks = () => {
-    fetch('http://localhost:5000/tasks')
-      .then((response) => response.json())
-      .then((data) => setTasks(data))
-      .catch((error) => console.error('Error fetching tasks:', error));
-  };
+  // ✅ fetchTasks (only one declaration)
+  const fetchTasks = useCallback(() => {
+    fetch(`http://localhost:5000/tasks?user=${username}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setTasks(data);
+        } else {
+          console.error('Expected an array of tasks, got:', data);
+          setTasks([]);
+        }
+      })
+      .catch((err) => {
+        console.error('Fetch error:', err);
+        setTasks([]);
+      });
+  }, [username]);
 
   useEffect(() => {
     fetchTasks();
-  }, []);
+
+    socket.on('notification', (msg) => {
+      setNotifications((prev) => [msg, ...prev.slice(0, 4)]);
+    });
+
+    return () => socket.off('notification');
+  }, [fetchTasks]);
 
   const addTask = (newTask) => {
     fetch('http://localhost:5000/tasks', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(newTask),
-    })
-      .then(() => fetchTasks())
-      .catch((error) => console.error('Error adding task:', error));
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...newTask, owner: username }),
+    }).then(fetchTasks);
   };
 
   const deleteTask = (id) => {
     fetch(`http://localhost:5000/tasks/${id}`, {
       method: 'DELETE',
-    })
-      .then(() => fetchTasks())
-      .catch((error) => console.error('Error deleting task:', error));
+    }).then(fetchTasks);
   };
 
   const toggleComplete = (id) => {
     fetch(`http://localhost:5000/tasks/${id}/toggle`, {
       method: 'PATCH',
-    })
-      .then(() => fetchTasks())
-      .catch((error) => console.error('Error toggling task:', error));
+    }).then(fetchTasks);
   };
 
-  const editTask = (id, updatedTask) => {
+  const editTask = (id, updates) => {
     fetch(`http://localhost:5000/tasks/${id}`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(updatedTask),
-    })
-      .then(() => fetchTasks())
-      .catch((error) => console.error('Error editing task:', error));
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    }).then(fetchTasks);
   };
 
-  const getFilteredAndSortedTasks = () => {
-    let filteredTasks = [...tasks];
+  const shareTask = (id) => {
+    const userToShare = prompt('Enter username to share with:');
+    if (!userToShare) return;
 
-    if (filterOption === 'completed') {
-      filteredTasks = filteredTasks.filter((task) => task.completed);
-    } else if (filterOption === 'pending') {
-      filteredTasks = filteredTasks.filter((task) => !task.completed);
+    const task = tasks.find((t) => t.id === id);
+    const sharedWith = task.sharedWith ? [...JSON.parse(task.sharedWith)] : [];
+
+    if (!sharedWith.includes(userToShare)) {
+      sharedWith.push(userToShare);
     }
 
-    if (sortOption === 'title') {
-      filteredTasks.sort((a, b) => a.title.localeCompare(b.title));
-    } else if (sortOption === 'completed') {
-      filteredTasks.sort((a, b) => (b.completed ? 1 : -1) - (a.completed ? 1 : -1));
-    }
-
-    return filteredTasks;
+    fetch(`http://localhost:5000/tasks/${id}/share`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shareWith: sharedWith }),
+    }).then(fetchTasks);
   };
 
- return (
-  <div className="container">
-    <h1>Task Management System</h1>
-    <TaskForm addTask={addTask} />
-    
-    {/* Sort and Filter Controls */}
-    <div>
-      <label>Sort By: </label>
-      <select value={sortOption} onChange={(e) => setSortOption(e.target.value)}>
-        <option value="default">Default</option>
-        <option value="title">Title (A-Z)</option>
-        <option value="completed">Completed First</option>
-      </select>
+  return (
+    <div className="container">
+      <h1>Task Management</h1>
+      <p>Logged in as: <strong>{username}</strong></p>
+
+      <TaskForm addTask={addTask} />
+
+      <div className="notifications">
+        <h3>Notifications</h3>
+        <ul>
+          {notifications.map((note, i) => (
+            <li key={i}>{note}</li>
+          ))}
+        </ul>
+      </div>
+
+      <TaskList
+        tasks={tasks}
+        deleteTask={deleteTask}
+        toggleComplete={toggleComplete}
+        editTask={editTask}
+        shareTask={shareTask}
+      />
+
+      <hr style={{ margin: '40px 0' }} />
+
+      <AnalyticsDashboard username={username} />
     </div>
-
-    <div>
-      <label>Filter By: </label>
-      <select value={filterOption} onChange={(e) => setFilterOption(e.target.value)}>
-        <option value="all">All</option>
-        <option value="completed">Completed Only</option>
-        <option value="pending">Pending Only</option>
-      </select>
-    </div>
-
-    <TaskList
-      tasks={getFilteredAndSortedTasks()}
-      deleteTask={deleteTask}
-      toggleComplete={toggleComplete}
-      editTask={editTask}
-    />
-  </div>
-);
-
+  );
 };
 
 export default App;

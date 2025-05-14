@@ -1,71 +1,72 @@
 import React, { useState } from 'react';
 
-const TaskList = ({ tasks, deleteTask, toggleComplete, editTask }) => {
+const TaskList = ({ tasks, deleteTask, toggleComplete, editTask, shareTask }) => {
   const [editId, setEditId] = useState(null);
   const [editedTitle, setEditedTitle] = useState('');
   const [editedDescription, setEditedDescription] = useState('');
 
-  const startEdit = (task) => {
+  const startEditing = (task) => {
     setEditId(task.id);
     setEditedTitle(task.title);
     setEditedDescription(task.description);
   };
 
-  const handleEditSubmit = (e) => {
-    e.preventDefault();
-    editTask(editId, {
-      title: editedTitle,
-      description: editedDescription,
-    });
+  const saveEdit = (id) => {
+    if (editedTitle.trim() === '' || editedDescription.trim() === '') return;
+    editTask(id, { title: editedTitle, description: editedDescription });
     setEditId(null);
-    setEditedTitle('');
-    setEditedDescription('');
   };
 
   return (
-    <ul>
-      {tasks.map((task) => (
-        <li
-          key={task.id}
-          style={{
-            marginBottom: '10px',
-            textDecoration: task.completed ? 'line-through' : 'none',
-          }}
-        >
-          {editId === task.id ? (
-            <form onSubmit={handleEditSubmit}>
-              <input
-                type="text"
-                value={editedTitle}
-                onChange={(e) => setEditedTitle(e.target.value)}
-                required
-              />
-              <input
-                type="text"
-                value={editedDescription}
-                onChange={(e) => setEditedDescription(e.target.value)}
-                required
-              />
-              <button type="submit">Save</button>
-              <button type="button" onClick={() => setEditId(null)}>
-                Cancel
-              </button>
-            </form>
-          ) : (
-            <>
-              <strong>{task.title}</strong>: {task.description}
-              <div>
-                <button onClick={() => toggleComplete(task.id)}>
-                  {task.completed ? 'Undo' : 'Complete'}
-                </button>
-                <button onClick={() => deleteTask(task.id)}>Delete</button>
-                <button onClick={() => startEdit(task)}>Edit</button>
-              </div>
-            </>
-          )}
-        </li>
-      ))}
-    </ul>
+    <div>
+      {Array.isArray(tasks) && tasks.length === 0 && <p>No tasks yet.</p>}
+
+      {Array.isArray(tasks) &&
+        tasks.map((task) => (
+          <div
+            className={`task-item ${task.completed ? 'completed' : ''}`}
+            key={task.id}
+          >
+            {editId === task.id ? (
+              <>
+                <input
+                  type="text"
+                  value={editedTitle}
+                  onChange={(e) => setEditedTitle(e.target.value)}
+                />
+                <input
+                  type="text"
+                  value={editedDescription}
+                  onChange={(e) => setEditedDescription(e.target.value)}
+                />
+                <button onClick={() => saveEdit(task.id)}>Save</button>
+                <button onClick={() => setEditId(null)}>Cancel</button>
+              </>
+            ) : (
+              <>
+                <h3>{task.title}</h3>
+                <p>{task.description}</p>
+                <p>
+                  <small>
+                    Shared with:{' '}
+                    {task.sharedWith && task.sharedWith.length > 0
+                      ? JSON.parse(task.sharedWith).join(', ')
+                      : '—'}
+                  </small>
+                </p>
+                <div className="task-buttons">
+                  <button onClick={() => toggleComplete(task.id)}>
+                    {task.completed ? 'Undo' : 'Complete'}
+                  </button>
+                  <button onClick={() => startEditing(task)}>Edit</button>
+                  <button onClick={() => deleteTask(task.id)}>Delete</button>
+                  <button onClick={() => shareTask(task.id)}>Share</button>
+                </div>
+              </>
+            )}
+          </div>
+        ))}
+    </div>
   );
 };
 
