@@ -11,6 +11,15 @@ const io = new Server(server, {
   cors: { origin: 'http://localhost:3000' },
 });
 const path = require('path');
+
+// Serve static files from the React app
+app.use(express.static(path.join(__dirname, '../client/build')));
+
+// Handle React routing, return all requests to React app
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
+});
+
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 
