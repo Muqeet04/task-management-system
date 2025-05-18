@@ -1,71 +1,46 @@
-import React, { useState } from 'react';
+import React from 'react';
 
 const TaskList = ({ tasks, deleteTask, toggleComplete, editTask, shareTask }) => {
-  const [editId, setEditId] = useState(null);
-  const [editedTitle, setEditedTitle] = useState('');
-  const [editedDescription, setEditedDescription] = useState('');
-
-  const startEditing = (task) => {
-    setEditId(task.id);
-    setEditedTitle(task.title);
-    setEditedDescription(task.description);
-  };
-
-  const saveEdit = (id) => {
-    if (editedTitle.trim() === '' || editedDescription.trim() === '') return;
-    editTask(id, { title: editedTitle, description: editedDescription });
-    setEditId(null);
+  const isImage = (filename) => {
+    return /\.(jpg|jpeg|png|gif|webp)$/i.test(filename);
   };
 
   return (
     <div>
-      {Array.isArray(tasks) && tasks.length === 0 && <p>No tasks yet.</p>}
+      {tasks.map((task) => (
+        <div className="task-item" key={task.id}>
+          <h3>{task.title}</h3>
+          <p>{task.description}</p>
 
-      {Array.isArray(tasks) &&
-        tasks.map((task) => (
-          <div
-            className={`task-item ${task.completed ? 'completed' : ''}`}
-            key={task.id}
-          >
-            {editId === task.id ? (
-              <>
-                <input
-                  type="text"
-                  value={editedTitle}
-                  onChange={(e) => setEditedTitle(e.target.value)}
+          {task.attachment && (
+            <div style={{ marginTop: '10px' }}>
+              {isImage(task.attachment) ? (
+                <img
+                  src={`http://localhost:5000/uploads/${task.attachment}`}
+                  alt="attachment"
+                  style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px' }}
                 />
-                <input
-                  type="text"
-                  value={editedDescription}
-                  onChange={(e) => setEditedDescription(e.target.value)}
-                />
-                <button onClick={() => saveEdit(task.id)}>Save</button>
-                <button onClick={() => setEditId(null)}>Cancel</button>
-              </>
-            ) : (
-              <>
-                <h3>{task.title}</h3>
-                <p>{task.description}</p>
-                <p>
-                  <small>
-                    Shared with:{' '}
-                    {task.sharedWith && task.sharedWith.length > 0
-                      ? JSON.parse(task.sharedWith).join(', ')
-                      : '—'}
-                  </small>
-                </p>
-                <div className="task-buttons">
-                  <button onClick={() => toggleComplete(task.id)}>
-                    {task.completed ? 'Undo' : 'Complete'}
-                  </button>
-                  <button onClick={() => startEditing(task)}>Edit</button>
-                  <button onClick={() => deleteTask(task.id)}>Delete</button>
-                  <button onClick={() => shareTask(task.id)}>Share</button>
-                </div>
-              </>
-            )}
+              ) : (
+                <a
+                  href={`http://localhost:5000/uploads/${task.attachment}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  📎 View Attachment
+                </a>
+              )}
+            </div>
+          )}
+
+          <div className="task-buttons" style={{ marginTop: '10px' }}>
+            <button onClick={() => toggleComplete(task.id)}>
+              {task.completed ? '✅ Undo' : '✔ Complete'}
+            </button>
+            <button onClick={() => deleteTask(task.id)}>🗑 Delete</button>
+            <button onClick={() => shareTask(task.id)}>📤 Share</button>
           </div>
-        ))}
+        </div>
+      ))}
     </div>
   );
 };

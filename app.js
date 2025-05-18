@@ -10,6 +10,9 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: 'http://localhost:3000' },
 });
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 
 app.use(cors());
 app.use(express.json());
@@ -32,26 +35,42 @@ io.on('connection', (socket) => {
 });
 
 // POST /tasks
-app.post('/tasks', (req, res) => {
-  const { title, description, owner } = req.body;
-  const sharedWith = '[]'; // Default empty array
+const multer = require('multer');
 
-  db.query(
-    'INSERT INTO tasks (title, description, owner, sharedWith) VALUES (?, ?, ?, ?)',
-    [title, description, owner, sharedWith],
-    (err, result) => {
-      if (err) return res.status(500).send(err);
-      io.emit('notification', `New task added by ${owner}`);
-      res.status(201).json({
-        id: result.insertId,
-        title,
-        description,
-        owner,
-        sharedWith,
-        completed: 0,
-      });
+// Configure multer
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, 'uploads/'),
+  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname),
+});
+const upload = multer({ storage });
+
+app.post('/tasks', upload.single('attachment'), (req, res) => {
+  const { title, description } = req.body;
+  const owner = 'muqeet'; // Hardcoded or from req.body / auth
+  const attachment = req.file ? req.file.filename : null;
+
+  const sql = `
+    INSERT INTO tasks (title, description, owner, sharedWith, completed, createdAt, attachment)
+    VALUES (?, ?, ?, ?, ?, NOW(), ?)
+  `;
+  const values = [title, description, owner, '[]', false, attachment];
+
+  db.query(sql, values, (err, result) => {
+    if (err) {
+      console.error('DB insert error:', err);
+      return res.status(500).json({ error: 'Failed to add task.' });
     }
-  );
+
+    io.emit('notification', `New task added by ${owner}`);
+    res.status(201).json({
+      id: result.insertId,
+      title,
+      description,
+      owner,
+      attachment,
+      completed: false,
+    });
+  });
 });
 
 // GET /tasks?user=muqeet
