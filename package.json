@@ -22,3 +22,7 @@
     "socket.io-client": "^4.8.1"
   }
 }
+"scripts": {
+  "build": "cd client && npm install && npm run build",
+  "start": "node server.js"
+}

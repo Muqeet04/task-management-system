@@ -3,59 +3,58 @@ const cors = require('cors');
 const mysql = require('mysql2');
 const http = require('http');
 const { Server } = require('socket.io');
+const multer = require('multer');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
+
+// Allow socket.io CORS for development
 const io = new Server(server, {
-  cors: { origin: 'http://localhost:3000' },
-});
-const path = require('path');
-
-// Serve static files from the React app
-app.use(express.static(path.join(__dirname, '../client/build')));
-
-// Handle React routing, return all requests to React app
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
+  cors: { origin: '*' }, // Change this to your frontend URL in production
 });
 
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-
+// Middleware
 app.use(cors());
 app.use(express.json());
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Serve frontend (React build)
+app.use(express.static(path.join(__dirname, 'client/build')));
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
+});
+
+// Database connection using environment variables
 const db = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: 'muqeet', // 👈 update this
-  database: 'taskdb',
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
 });
 
 db.connect((err) => {
-  if (err) return console.error('DB Error:', err);
+  if (err) return console.error('❌ DB Connection Error:', err);
   console.log('✅ MySQL connected');
 });
 
-// Socket.IO notifications
+// Socket.IO for real-time notifications
 io.on('connection', (socket) => {
-  console.log('🔌 Client connected');
+  console.log('🔌 New client connected');
 });
 
-// POST /tasks
-const multer = require('multer');
-
-// Configure multer
+// Multer config for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, 'uploads/'),
   filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname),
 });
 const upload = multer({ storage });
 
+// Add a task
 app.post('/tasks', upload.single('attachment'), (req, res) => {
   const { title, description } = req.body;
-  const owner = 'muqeet'; // Hardcoded or from req.body / auth
+  const owner = 'muqeet'; // Replace with auth later if needed
   const attachment = req.file ? req.file.filename : null;
 
   const sql = `
@@ -82,7 +81,7 @@ app.post('/tasks', upload.single('attachment'), (req, res) => {
   });
 });
 
-// GET /tasks?user=muqeet
+// Get tasks
 app.get('/tasks', (req, res) => {
   const user = req.query.user;
   const sql = `
@@ -96,7 +95,7 @@ app.get('/tasks', (req, res) => {
   });
 });
 
-// PATCH /tasks/:id
+// Update task
 app.patch('/tasks/:id', (req, res) => {
   const { title, description } = req.body;
   db.query(
@@ -109,7 +108,7 @@ app.patch('/tasks/:id', (req, res) => {
   );
 });
 
-// PATCH /tasks/:id/toggle
+// Toggle task status
 app.patch('/tasks/:id/toggle', (req, res) => {
   db.query(
     'UPDATE tasks SET completed = NOT completed WHERE id = ?',
@@ -121,7 +120,7 @@ app.patch('/tasks/:id/toggle', (req, res) => {
   );
 });
 
-// DELETE /tasks/:id
+// Delete task
 app.delete('/tasks/:id', (req, res) => {
   db.query('DELETE FROM tasks WHERE id = ?', [req.params.id], (err) => {
     if (err) return res.status(500).send(err);
@@ -129,7 +128,7 @@ app.delete('/tasks/:id', (req, res) => {
   });
 });
 
-// PUT /tasks/:id/share
+// Share task
 app.put('/tasks/:id/share', (req, res) => {
   const { shareWith } = req.body;
   db.query(
@@ -143,12 +142,15 @@ app.put('/tasks/:id/share', (req, res) => {
   );
 });
 
-// Analytics
+// Analytics - overview
 app.get('/analytics/overview', (req, res) => {
   const user = req.query.user;
   db.query(
-    `SELECT COUNT(*) AS total, SUM(completed=1) AS completed, SUM(completed=0) AS pending
-     FROM tasks WHERE owner = ? OR JSON_CONTAINS(sharedWith, JSON_QUOTE(?))`,
+    `SELECT COUNT(*) AS total, 
+            SUM(completed=1) AS completed, 
+            SUM(completed=0) AS pending
+     FROM tasks 
+     WHERE owner = ? OR JSON_CONTAINS(sharedWith, JSON_QUOTE(?))`,
     [user, user],
     (err, result) => {
       if (err) return res.status(500).send(err);
@@ -157,6 +159,7 @@ app.get('/analytics/overview', (req, res) => {
   );
 });
 
+// Analytics - trends
 app.get('/analytics/trends', (req, res) => {
   const user = req.query.user;
   db.query(
@@ -174,7 +177,9 @@ app.get('/analytics/trends', (req, res) => {
   );
 });
 
-server.listen(5000, () => {
-  console.log('🚀 Server running on http://localhost:5000');
+// Start server
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
 });
 
