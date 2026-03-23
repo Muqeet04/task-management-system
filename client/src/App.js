@@ -5,13 +5,14 @@ import TaskList from './components/TaskList';
 import DarkModeToggle from './components/DarkModeToggle';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import ShareModal from './components/ShareModal';
+import AuthPage from './components/AuthPage';
 import './App.css';
 
 const BASE = 'http://localhost:5000';
 const socket = io(BASE, { autoConnect: true });
-const USERNAME = 'muqeet';
 
 const App = () => {
+  const [user, setUser] = useState(() => localStorage.getItem('tf_user') || null);
   const [tasks, setTasks] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [tab, setTab] = useState('tasks');
@@ -24,8 +25,9 @@ const App = () => {
 
   // ── Fetch tasks ──────────────────────────────────────────────────────────
   const fetchTasks = useCallback(() => {
+    if (!user) return;
     setLoading(true);
-    const params = new URLSearchParams({ user: USERNAME, search, filter });
+    const params = new URLSearchParams({ user, search, filter });
     fetch(`${BASE}/tasks?${params}`)
       .then((r) => r.json())
       .then((data) => setTasks(Array.isArray(data) ? data : []))
@@ -53,6 +55,7 @@ const App = () => {
 
   // ── Task actions ─────────────────────────────────────────────────────────
   const addTask = (formData) => {
+    formData.append('owner', user);
     setAddingTask(true);
     fetch(`${BASE}/tasks`, { method: 'POST', body: formData })
       .then((r) => {
@@ -102,11 +105,25 @@ const App = () => {
       .catch(console.error);
   };
 
+  // ── Auth ─────────────────────────────────────────────────────────────────
+  const handleLogin = (username) => {
+    localStorage.setItem('tf_user', username);
+    setUser(username);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('tf_user');
+    setUser(null);
+    setTasks([]);
+  };
+
   // ── Stats ────────────────────────────────────────────────────────────────
   const total = tasks.length;
   const completed = tasks.filter((t) => t.completed).length;
   const pending = total - completed;
   const completionRate = total ? Math.round((completed / total) * 100) : 0;
+
+  if (!user) return <AuthPage onLogin={handleLogin} />;
 
   return (
     <div className="app-wrapper">
@@ -118,9 +135,12 @@ const App = () => {
         </div>
         <div className="app-header-right">
           <div className="user-badge">
-            <div className="user-avatar">{USERNAME[0].toUpperCase()}</div>
-            <span>{USERNAME}</span>
+            <div className="user-avatar">{user[0].toUpperCase()}</div>
+            <span>{user}</span>
           </div>
+          <button className="btn btn-ghost btn-sm" onClick={handleLogout} title="Logout">
+            ⎋ Logout
+          </button>
           <DarkModeToggle />
         </div>
       </header>
@@ -222,7 +242,7 @@ const App = () => {
           </>
         )}
 
-        {tab === 'analytics' && <AnalyticsDashboard username={USERNAME} />}
+        {tab === 'analytics' && <AnalyticsDashboard username={user} />}
       </main>
 
       {/* FAB — always visible */}

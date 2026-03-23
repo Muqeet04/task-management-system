@@ -4,7 +4,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const multer = require('multer');
 const path = require('path');
-const db = require('./db'); // single shared connection
+const db = require('./db');
 require('dotenv').config();
 
 const app = express();
@@ -39,6 +39,38 @@ const upload = multer({
 io.on('connection', (socket) => {
   console.log('🔌 Client connected:', socket.id);
   socket.on('disconnect', () => console.log('🔌 Client disconnected:', socket.id));
+});
+
+// ── Auth ───────────────────────────────────────────────────────────────────
+
+// Register
+app.post('/auth/register', (req, res) => {
+  const { username, password } = req.body;
+  if (!username?.trim() || !password) return res.status(400).json({ error: 'Username and password required.' });
+
+  const uname = username.trim().toLowerCase();
+  db.query('SELECT id FROM users WHERE username = ?', [uname], (err, rows) => {
+    if (err) return res.status(500).json({ error: 'DB error.' });
+    if (rows.length) return res.status(409).json({ error: 'Username already taken.' });
+
+    db.query('INSERT INTO users (username, password) VALUES (?, ?)', [uname, password], (err2, result) => {
+      if (err2) return res.status(500).json({ error: 'Failed to create account.' });
+      res.status(201).json({ username: uname, id: result.insertId });
+    });
+  });
+});
+
+// Login
+app.post('/auth/login', (req, res) => {
+  const { username, password } = req.body;
+  if (!username?.trim() || !password) return res.status(400).json({ error: 'Username and password required.' });
+
+  const uname = username.trim().toLowerCase();
+  db.query('SELECT * FROM users WHERE username = ? AND password = ?', [uname, password], (err, rows) => {
+    if (err) return res.status(500).json({ error: 'DB error.' });
+    if (!rows.length) return res.status(401).json({ error: 'Invalid username or password.' });
+    res.json({ username: uname, id: rows[0].id });
+  });
 });
 
 // ── Tasks ──────────────────────────────────────────────────────────────────
